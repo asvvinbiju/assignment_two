@@ -32,14 +32,15 @@ class Properties(scrapy.Spider):
         bathrooms = None
         bedrooms = None
         details = response.xpath('//div[@class="_3nSm3"]/div/div')
-        for detail in details:
-            detail_type = detail.xpath('//span[@class="_3V4pD"]/text()').get()
-            if detail_type == "Type":
-                type = detail.xpath('//span[@class="B6X7c"]/text()').get()
-            elif detail_type == "Bedrooms":
-                bedrooms = detail.xpath('//span[@class="B6X7c"]/text()').get()
-            elif detail_type == "Bathrooms":
-                bathrooms = detail.xpath('//span[@class="B6X7c"]/text()').get()
+        detail_type = details.xpath('//span[@class="_3V4pD"]/text()').getall()
+        detail_ = details.xpath(f'//span[@class="B6X7c"]/text()').getall()
+        for detail, value in zip(detail_type, detail_):
+            if detail == "Type":
+                type = value
+            elif detail == "Bedrooms":
+                bedrooms = value
+            elif detail == "Bathrooms":
+                bathrooms = value
         yield {
             "property_name": response.xpath('//h1[@class="_1hJph"]/text()').get(),
             "property_id": propertyid,
