@@ -1,19 +1,18 @@
 import scrapy
 from scrapy.http import HtmlResponse
 from selenium import webdriver
-from selenium.webdriver.common.by import By 
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException
 import time
 
-class NewSpider(scrapy.Spider):
-    name = "newspider"
+class MrWeb(scrapy.Spider):
+    name = "mrweb"
     start_urls = ['https://www.olx.in/kozhikode_g4058877/for-rent-houses-apartments_c1723']
-    
-    visited_urls = set()
+    properties_url = set()
+    i = 0
 
     def __init__(self, *args, **kwargs):
         chrome_options = Options()
@@ -22,51 +21,40 @@ class NewSpider(scrapy.Spider):
         self.driver = webdriver.Chrome(service=ChromeService("/usr/local/bin/chromedriver"),options=chrome_options)
     
     def parse(self, response):
-        val = response.xpath('//span[@class="_2NPFF"]/text()')[1].get()
         self.driver.get(response.url)
         wait = WebDriverWait(self.driver, 10)
+        wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
+          
+        wait.until(EC.presence_of_element_located((By.XPATH, '//span[@class="_2NPFF"]')))
+        
         try:
-            # wait.until(
-            #         EC.presence_of_element_located((By.CLASS_NAME, '_2cbZ2'))
-            #     )
-            wait.until(
-                    EC.presence_of_element_located((By.XPATH, '//button[@data-aut-id="btnLoadMore"]'))
-                )
-            click_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, '//button[@data-aut-id="btnLoadMore"]'))
-            )
-            self.driver.execute_script("arguments[0].scrollIntoView(true);", click_button)
-            if val == ': Date Published':
-                click_button.click()
-
-            wait.until(
-                EC.presence_of_element_located((By.XPATH, '//button[@data-aut-id="btnLoadMore"]'))
-            )
-            
-        except Exception as e:
-            self.logger.error(f"Error: {str(e)}")
-        finally:
-            try:
-                new_response = HtmlResponse(url=self.driver.current_url, body=self.driver.page_source, encoding="utf-8")
-                all_properties = new_response.xpath('//li[@class="_1DNjI"]/a/@href').getall()
-                for link in all_properties:
-                    self.visited_urls.add(f"https://www.olx.in/{link}")
-                for i in self.visited_urls:
-                    yield scrapy.Request(url=i, callback=self.parse_properties)
-            except Exception as e:
-                self.logger.error(f"Error Reading:{str(e)}")
-            if len(self.visited_urls) >= 100:
-                self.driver.quit()
-                return
-            yield scrapy.Request(url=self.driver.current_url, callback=self.parse)
-
-
-    # def new_response(self, response):
-    #     all_properties = response.xpath('//li[@class="_1DNjI"]/a/@href')
-    #     yield from response.follow_all(all_properties, self.parse_properties)
-    
+            click_button = self.driver.find_element(By.CSS_SELECTOR, '[class="rui-apowA rui-htytx rui-UGVY0"]')
+            if click_button:
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", click_button)
+        except:
+            self.log("no")
+            scrapy.Request(url=self.driver.current_url, callback=self.parse)
+        else:
+            self.log("yes")
+            self.driver.execute_script("arguments[0].click();", click_button)
+        try:
+            wait.until(EC.visibility_of_element_located((By.XPATH, '//figure[@class="_3UrC5"]/img')))
+        except:
+            pass
+        time.sleep(5)
+        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, '[class="rui-apowA rui-htytx rui-UGVY0"]')))
+        new_response = HtmlResponse(url=self.driver.current_url, body=self.driver.page_source, encoding="utf-8")
+        all_properties = new_response.xpath('//a/@href').getall()
+        for link in all_properties:
+            if link.startswith('/item'):
+                self.properties_url.add(f"https://www.olx.in{link}")
+        for i in self.properties_url:
+            yield scrapy.Request(url=i, callback=self.parse_properties)
+        self.driver.quit()
+        print(self.properties_url)
+        print(len(self.properties_url))
+        
     def parse_properties(self, response):
-        self.visited_urls.add(response.url)
         property_id = response.xpath('//div[@class="_1-oS0"]/strong/text()').getall()
         propertyid = property_id[2].strip() if len(property_id) > 2 else None
         price = response.xpath('//section[@class="_8S0h4"]/span[@class="T8y-z"]/text()').get()
