@@ -12,7 +12,6 @@ class MrWeb(scrapy.Spider):
     name = "mrweb"
     start_urls = ['https://www.olx.in/kozhikode_g4058877/for-rent-houses-apartments_c1723']
     properties_url = set()
-    i = 0
 
     def __init__(self, *args, **kwargs):
         chrome_options = Options()
@@ -22,27 +21,37 @@ class MrWeb(scrapy.Spider):
     
     def parse(self, response):
         self.driver.get(response.url)
-        wait = WebDriverWait(self.driver, 10)
+        wait = WebDriverWait(self.driver, 30)
         wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
-          
-        wait.until(EC.presence_of_element_located((By.XPATH, '//span[@class="_2NPFF"]')))
-        
-        try:
-            click_button = self.driver.find_element(By.CSS_SELECTOR, '[class="rui-apowA rui-htytx rui-UGVY0"]')
-            if click_button:
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", click_button)
-        except:
-            self.log("no")
-            scrapy.Request(url=self.driver.current_url, callback=self.parse)
-        else:
-            self.log("yes")
-            self.driver.execute_script("arguments[0].click();", click_button)
-        try:
-            wait.until(EC.visibility_of_element_located((By.XPATH, '//figure[@class="_3UrC5"]/img')))
-        except:
-            pass
-        time.sleep(5)
-        wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, '[class="rui-apowA rui-htytx rui-UGVY0"]')))
+        while len(self.properties_url) <= 200:
+            wait.until(EC.presence_of_element_located((By.XPATH, '//span[@class="_2NPFF"]')))
+            while True:
+                try:
+                    click_button = self.driver.find_element(By.CSS_SELECTOR, '[class="rui-apowA rui-htytx rui-UGVY0"]')
+                    if click_button:
+                        self.driver.execute_script("arguments[0].scrollIntoView(true);", click_button)
+                except:
+                    continue
+                else:
+                    self.driver.execute_script("arguments[0].click();", click_button)
+                    break
+            try:
+                wait.until(EC.visibility_of_element_located((By.XPATH, '//figure[@class="_3UrC5"]/img')))
+            except:
+                pass
+            try:
+                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[class="rui-apowA rui-htytx rui-UGVY0"]')))
+            except:
+                break
+
+            # while True:
+            #     try:
+            #         wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, '[class="rui-apowA rui-htytx rui-UGVY0"]')))
+            #     except:
+            #         continue
+            #     else:
+            #         break
+                
         new_response = HtmlResponse(url=self.driver.current_url, body=self.driver.page_source, encoding="utf-8")
         all_properties = new_response.xpath('//a/@href').getall()
         for link in all_properties:
@@ -51,8 +60,6 @@ class MrWeb(scrapy.Spider):
         for i in self.properties_url:
             yield scrapy.Request(url=i, callback=self.parse_properties)
         self.driver.quit()
-        print(self.properties_url)
-        print(len(self.properties_url))
         
     def parse_properties(self, response):
         property_id = response.xpath('//div[@class="_1-oS0"]/strong/text()').getall()
